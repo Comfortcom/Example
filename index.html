@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RNG Studio — Random Number Generator</title>
+<style>
+  :root {
+    --bg: #0f1420;
+    --bg-2: #161d2e;
+    --panel: #1b2436;
+    --panel-2: #212c42;
+    --border: #2c3a55;
+    --text: #e8edf7;
+    --muted: #93a1bd;
+    --accent: #5b8cff;
+    --accent-2: #8f6bff;
+    --accent-soft: rgba(91, 140, 255, 0.14);
+    --danger: #ff5b7a;
+    --ok: #3fd68f;
+    --radius: 14px;
+    --shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+    --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    --mono: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  }
+  [data-theme="light"] {
+    --bg: #f2f5fb;
+    --bg-2: #e8edf7;
+    --panel: #ffffff;
+    --panel-2: #f4f7fd;
+    --border: #d7e0f0;
+    --text: #17233d;
+    --muted: #61708f;
+    --accent-soft: rgba(91, 140, 255, 0.12);
+    --shadow: 0 8px 32px rgba(23, 35, 61, 0.10);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: var(--font);
+    background: radial-gradient(1200px 600px at 80% -10%, var(--accent-soft), transparent 60%), var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    transition: background 0.3s, color 0.3s;
+  }
+  .app { max-width: 1100px; margin: 0 auto; padding: 28px 20px 60px; }
+
+  header.topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; margin-bottom: 24px; flex-wrap: wrap;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .logo {
+    width: 42px; height: 42px; border-radius: 12px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: grid; place-items: center; font-size: 20px; font-weight: 700; color: #fff;
+    box-shadow: var(--shadow);
+  }
+  .brand h1 { font-size: 1.35rem; letter-spacing: 0.3px; }
+  .brand span { color: var(--muted); font-size: 0.8rem; display: block; }
+  .topbar-actions { display: flex; gap: 8px; }
+
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 20px;
+  }
+  .card h2 {
+    font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1.2px;
+    color: var(--muted); margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+  }
+  .card h2 .chip {
+    background: var(--accent-soft); color: var(--accent);
+    font-size: 0.7rem; padding: 2px 8px; border-radius: 999px; letter-spacing: 0;
+  }
+
+  /* Result display */
+  .result-stage {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    min-height: 170px;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px; margin-bottom: 16px; position: relative; overflow: hidden;
+  }
+  .result-stage::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(500px 200px at 50% 120%, var(--accent-soft), transparent 70%);
+    pointer-events: none;
+  }
+  .result-value {
+    font-family: var(--mono);
+    font-size: clamp(2.2rem, 7vw, 4rem);
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    word-break: break-all; text-align: center; line-height: 1.15;
+    transition: transform 0.08s;
+  }
+  .result-value.pop { animation: pop 0.35s ease; }
+  @keyframes pop { 0% { transform: scale(0.85); opacity: 0.4; } 100% { transform: scale(1); opacity: 1; } }
+  .result-meta { text-align: center; color: var(--muted); font-size: 0.85rem; margin-bottom: 18px; min-height: 1.2em; }
+
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  button {
+    font-family: inherit; cursor: pointer; border: 1px solid var(--border);
+    background: var(--panel-2); color: var(--text);
+    padding: 10px 16px; border-radius: 10px; font-size: 0.92rem;
+    transition: transform 0.1s, border-color 0.15s, background 0.15s;
+  }
+  button:hover { border-color: var(--accent); transform: translateY(-1px); }
+  button:active { transform: translateY(0); }
+  button.primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    border: none; color: #fff; font-weight: 600; padding: 12px 28px; font-size: 1rem;
+    box-shadow: 0 4px 18px rgba(91, 140, 255, 0.35);
+  }
+  button.primary:hover { filter: brightness(1.08); }
+  button.icon { padding: 10px 12px; display: inline-flex; align-items: center; gap: 6px; }
+  .generate-row { justify-content: center; }
+
+  /* Form controls */
+  .field { margin-bottom: 16px; }
+  .field label {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; font-weight: 500;
+  }
+  .field label .val { color: var(--text); font-family: var(--mono); }
+  input[type="number"], input[type="text"], input[type="password"], select {
+    width: 100%; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--bg-2); color: var(--text);
+    font-family: var(--mono); font-size: 0.95rem; outline: none;
+    transition: border-color 0.15s;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+  input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; }
+  .toggle-row span { font-size: 0.9rem; }
+  .toggle { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute; inset: 0; border-radius: 999px; cursor: pointer;
+    background: var(--border); transition: 0.2s;
+  }
+  .slider::before {
+    content: ''; position: absolute; height: 18px; width: 18px; left: 3px; top: 3px;
+    border-radius: 50%; background: #fff; transition: 0.2s;
+  }
+  input:checked + .slider { background: var(--accent); }
+  input:checked + .slider::before { transform: translateX(20px); }
+
+  .seg { display: flex; background: var(--bg-2); border: 1px solid var(--border); border-radius: 10px; padding: 4px; gap: 4px; }
+  .seg button {
+    flex: 1; border: none; background: transparent; padding: 8px 6px;
+    font-size: 0.85rem; border-radius: 8px; color: var(--muted);
+  }
+  .seg button.active { background: var(--accent); color: #fff; font-weight: 600; }
+
+  .hint { font-size: 0.75rem; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
+
+  /* Accent picker */
+  .swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+  .swatch {
+    width: 26px; height: 26px; border-radius: 50%; cursor: pointer;
+    border: 2px solid transparent; transition: transform 0.1s, border-color 0.15s;
+  }
+  .swatch:hover { transform: scale(1.15); }
+  .swatch.active { border-color: var(--text); }
+
+  /* History */
+  .history-list { list-style: none; max-height: 300px; overflow-y: auto; }
+  .history-list li {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 8px 10px; border-bottom: 1px solid var(--border);
+    font-family: var(--mono); font-size: 0.85rem;
+  }
+  .history-list li:last-child { border-bottom: none; }
+  .history-list .h-nums { flex: 1; word-break: break-all; }
+  .history-list .h-time { color: var(--muted); font-size: 0.7rem; white-space: nowrap; }
+  .history-list button {
+    padding: 2px 8px; font-size: 0.75rem; border-radius: 6px; background: transparent;
+    border: 1px solid var(--border);
+  }
+  .empty { color: var(--muted); font-size: 0.85rem; text-align: center; padding: 24px 0; }
+
+  /* Toast */
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+    background: var(--panel-2); border: 1px solid var(--accent); color: var(--text);
+    padding: 10px 20px; border-radius: 999px; font-size: 0.85rem;
+    box-shadow: var(--shadow); transition: transform 0.25s ease; z-index: 100;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* Presets */
+  .preset-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .preset-row button { font-size: 0.8rem; padding: 7px 12px; }
+
+  footer { text-align: center; color: var(--muted); font-size: 0.75rem; margin-top: 32px; }
+  kbd {
+    background: var(--panel-2); border: 1px solid var(--border); border-bottom-width: 2px;
+    border-radius: 5px; padding: 1px 6px; font-family: var(--mono); font-size: 0.75rem;
+  }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 14px; }
+  .stat { background: var(--bg-2); border: 1px solid var(--border); border-radius: 10px; padding: 8px; text-align: center; }
+  .stat b { display: block; font-family: var(--mono); font-size: 0.95rem; }
+  .stat span { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">🎲</div>
+      <div>
+        <h1>RNG Studio</h1>
+        <span>Random Number Generator with deep customization</span>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button class="icon" id="btnTheme" title="Toggle theme">🌙</button>
+      <button class="icon" id="btnExport" title="Export history as CSV">⬇ CSV</button>
+      <button class="icon" id="btnReset" title="Reset all settings">↺ Reset</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- ============ LEFT: Result ============ -->
+    <div class="card">
+      <h2>Result</h2>
+      <div class="result-stage">
+        <div class="result-value" id="result">?</div>
+      </div>
+      <div class="result-meta" id="meta">Press Generate or hit <kbd>Space</kbd></div>
+      <div class="btn-row generate-row">
+        <button class="primary" id="btnGenerate">🎲 Generate</button>
+        <button class="icon" id="btnCopy" title="Copy result">📋 Copy</button>
+        <button class="icon" id="btnRoll" title="Auto-roll every second">▶ Auto</button>
+      </div>
+      <div class="stats" id="stats" style="display:none">
+        <div class="stat"><b id="stMin">–</b><span>Min</span></div>
+        <div class="stat"><b id="stMax">–</b><span>Max</span></div>
+        <div class="stat"><b id="stAvg">–</b><span>Avg</span></div>
+        <div class="stat"><b id="stSum">–</b><span>Sum</span></div>
+      </div>
+    </div>
+
+    <!-- ============ RIGHT: Settings ============ -->
+    <div class="card">
+      <h2>Customization <span class="chip" id="engineChip">crypto</span></h2>
+
+      <div class="field">
+        <label>Range</label>
+        <div class="grid-2">
+          <input type="number" id="inMin" value="1" step="any" aria-label="Minimum">
+          <input type="number" id="inMax" value="100" step="any" aria-label="Maximum">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>How many numbers <span class="val" id="countVal">1</span></label>
+        <input type="range" id="inCount" min="1" max="50" value="1">
+      </div>
+
+      <div class="field">
+        <label>Mode</label>
+        <div class="seg" id="segMode">
+          <button data-v="int" class="active">Integer</button>
+          <button data-v="float">Decimal</button>
+          <button data-v="dice">Dice</button>
+          <button data-v="lottery">Lottery</button>
+        </div>
+      </div>
+
+      <div class="field" id="decimalsField" style="display:none">
+        <label>Decimal places <span class="val" id="decVal">2</span></label>
+        <input type="range" id="inDecimals" min="1" max="10" value="2">
+      </div>
+
+      <div class="field" id="diceField" style="display:none">
+        <label>Dice notation</label>
+        <input type="text" id="inDice" value="2d6+1" spellcheck="false">
+        <div class="hint">Format: <b>NdS±M</b> — e.g. <b>3d6</b>, <b>1d20+5</b>, <b>4d10-2</b>. Supports d4/d6/d8/d10/d12/d20/d100.</div>
+      </div>
+
+      <div class="field" id="lotteryField" style="display:none">
+        <label>Pool size (pick N unique from 1..M)</label>
+        <div class="grid-2">
+          <input type="number" id="inLottoPick" value="6" min="1" max="99" aria-label="Pick">
+          <input type="number" id="inLottoMax" value="49" min="1" max="999" aria-label="Pool max">
+        </div>
+      </div>
+
+      <hr class="divider">
+      <h2>Advanced</h2>
+
+      <div class="toggle-row"><span>Allow duplicates</span><label class="toggle"><input type="checkbox" id="inDup" checked><span class="slider"></span></label></div>
+      <div class="toggle-row"><span>Sort results</span><label class="toggle"><input type="checkbox" id="inSort"><span class="slider"></span></label></div>
+      <div class="toggle-row"><span>Exclude boundaries (min/max)</span><label class="toggle"><input type="checkbox" id="inExclude"><span class="slider"></span></label></div>
+      <div class="toggle-row"><span>Use seeded PRNG (reproducible)</span><label class="toggle"><input type="checkbox" id="inSeed"><span class="slider"></span></label></div>
+
+      <div class="field" id="seedField" style="display:none">
+        <label>Seed</label>
+        <input type="text" id="inSeedVal" value="42" spellcheck="false">
+        <div class="hint">Same seed + same settings = same sequence (mulberry32). Each Generate advances the seed.</div>
+      </div>
+
+      <div class="field" id="filterField">
+        <label>Parity filter</label>
+        <div class="seg" id="segParity">
+          <button data-v="any" class="active">Any</button>
+          <button data-v="even">Even</button>
+          <button data-v="odd">Odd</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Digit sum range (0 = off)</label>
+        <div class="grid-2">
+          <input type="number" id="inDigitLo" value="0" min="0" aria-label="Digit sum min">
+          <input type="number" id="inDigitHi" value="0" min="0" aria-label="Digit sum max">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Exclude specific numbers</label>
+        <input type="text" id="inBlacklist" placeholder="e.g. 13, 66, 7" spellcheck="false">
+        <div class="hint">Comma-separated values to always exclude from results.</div>
+      </div>
+
+      <hr class="divider">
+      <h2>Presets</h2>
+      <div class="preset-row" id="presets">
+        <button data-p="coin">🪙 Coin flip</button>
+        <button data-p="d20">⚔️ d20</button>
+        <button data-p="lotto">🎰 Lottery</button>
+        <button data-p="percent">📊 0–100%</button>
+        <button data-p="pin">🔢 4-digit PIN</button>
+        <button data-p="neg">🌡️ −50…50</button>
+      </div>
+
+      <hr class="divider">
+      <h2>Appearance</h2>
+      <div class="field">
+        <label>Accent color</label>
+        <div class="swatches" id="swatches">
+          <div class="swatch active" data-c="#5b8cff" style="background:#5b8cff" title="Blue"></div>
+          <div class="swatch" data-c="#3fd68f" style="background:#3fd68f" title="Green"></div>
+          <div class="swatch" data-c="#ff5b7a" style="background:#ff5b7a" title="Red"></div>
+          <div class="swatch" data-c="#ffb44d" style="background:#ffb44d" title="Orange"></div>
+          <div class="swatch" data-c="#c86bff" style="background:#c86bff" title="Purple"></div>
+          <div class="swatch" data-c="#2dd4cf" style="background:#2dd4cf" title="Teal"></div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Stage font size <span class="val" id="fsVal">100%</span></label>
+        <input type="range" id="inFontSize" min="60" max="160" value="100">
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ History ============ -->
+  <div class="card" style="margin-top:20px">
+    <h2>History <span class="chip" id="histCount">0</span>
+      <span style="flex:1"></span>
+      <button style="font-size:0.75rem; padding:5px 10px" id="btnClearHist">Clear</button>
+    </h2>
+    <ul class="history-list" id="history"></ul>
+    <div class="empty" id="histEmpty">No rolls yet — generate a number to start.</div>
+  </div>
+
+  <footer>RNG Studio • Space = generate, C = copy, A = auto-roll • Cryptographically secure via <code>crypto.getRandomValues</code> when seed mode is off</footer>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(() => {
+  'use strict';
+
+  const $ = id => document.getElementById(id);
+  const els = {
+    min: $('inMin'), max: $('inMax'), count: $('inCount'), countVal: $('countVal'),
+    decimals: $('inDecimals'), decVal: $('decVal'), decimalsField: $('decimalsField'),
+    dice: $('inDice'), diceField: $('diceField'),
+    lottoPick: $('inLottoPick'), lottoMax: $('inLottoMax'), lotteryField: $('lotteryField'),
+    dup: $('inDup'), sort: $('inSort'), exclude: $('inExclude'),
+    seed: $('inSeed'), seedField: $('seedField'), seedVal: $('inSeedVal'),
+    parity: $('segParity'), digitLo: $('inDigitLo'), digitHi: $('inDigitHi'),
+    blacklist: $('inBlacklist'), result: $('result'), meta: $('meta'),
+    history: $('history'), histEmpty: $('histEmpty'), histCount: $('histCount'),
+    stats: $('stats'), stMin: $('stMin'), stMax: $('stMax'), stAvg: $('stAvg'), stSum: $('stSum'),
+    engineChip: $('engineChip'), toast: $('toast')
+  };
+
+  const SETTINGS_KEY = 'rngstudio.settings';
+  const HISTORY_KEY = 'rngstudio.history';
+  let mode = 'int';
+  let history = [];
+  let seedState = 42;
+  let autoTimer = null;
+  let lastNumbers = [];
+
+  /* ---------- RNG engines ---------- */
+  function cryptoInt(min, max) { // inclusive
+    if (min > max) [min, max] = [max, min];
+    const range = max - min + 1;
+    if (!Number.isSafeInteger(range)) {
+      return min + Math.floor(cryptoFloat() * (max - min + 1));
+    }
+    if (range <= 0) return min;
+    const maxUint = 4294967296;
+    const limit = maxUint - (maxUint % range);
+    const buf = new Uint32Array(1);
+    let v;
+    do { crypto.getRandomValues(buf); v = buf[0]; } while (v >= limit);
+    return min + (v % range);
+  }
+  function cryptoFloat() {
+    const buf = new Uint32Array(2);
+    crypto.getRandomValues(buf);
+    return (buf[0] * 2097152 + (buf[1] >>> 11)) / 9007199254740992; // 53-bit
+  }
+  function mulberry32(a) {
+    return function() {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function seededInt(rand, min, max) {
+    return min + Math.floor(rand() * (max - min + 1));
+  }
+
+  function engine() {
+    if (els.seed.checked) {
+      seedState = (seedState * 1664525 + 1013904223) >>> 0;
+      const rand = mulberry32(seedState);
+      return {
+        int: (a, b) => seededInt(rand, a, b),
+        float: () => rand(),
+        label: 'seed'
+      };
+    }
+    return { int: cryptoInt, float: cryptoFloat, label: 'crypto' };
+  }
+
+  /* ---------- Parsing & filtering ---------- */
+  function getBounds() {
+    let min = parseFloat(els.min.value);
+    let max = parseFloat(els.max.value);
+    if (!Number.isFinite(min)) min = 0;
+    if (!Number.isFinite(max)) max = 100;
+    if (min > max) [min, max] = [max, min];
+    if (els.exclude.checked) {
+      if (Number.isInteger(min)) min += 1;
+      if (Number.isInteger(max)) max -= 1;
+    }
+    return { min, max };
+  }
+  function getBlacklist() {
+    return new Set(
+      els.blacklist.value.split(/[,\s]+/).map(s => s.trim())
+        .filter(s => s !== '').map(Number).filter(n => !Number.isNaN(n))
+    );
+  }
+  function digitSum(n) {
+    return Math.abs(Math.round(n)).toString().split('').reduce((a, d) => a + (+d), 0);
+  }
+  function passesFilters(n) {
+    const bl = getBlacklist();
+    if (bl.has(n)) return false;
+    const p = currentParity();
+    if (p === 'even' && Math.round(n) % 2 !== 0) return false;
+    if (p === 'odd' && Math.round(n) % 2 !== 1) return false;
+    const lo = parseFloat(els.digitLo.value) || 0;
+    const hi = parseFloat(els.digitHi.value) || 0;
+    if (lo > 0 && digitSum(n) < lo) return false;
+    if (hi > 0 && digitSum(n) > hi) return false;
+    return true;
+  }
+  function currentParity() {
+    const btn = els.parity.querySelector('button.active');
+    return btn ? btn.dataset.v : 'any';
+  }
+
+  /* ---------- Generators per mode ---------- */
+  function genNumbers() {
+    const eng = engine();
+    const count = parseInt(els.count.value, 10) || 1;
+    const dec = parseInt(els.decimals.value, 10) || 2;
+
+    if (mode === 'dice') return genDice(eng);
+    if (mode === 'lottery') return genLottery(eng);
+
+    const { min, max } = getBounds();
+    if (mode === 'float') {
+      const out = [];
+      for (let i = 0; i < count; i++) {
+        let v = min + eng.float() * (max - min);
+        out.push(+v.toFixed(dec));
+      }
+      return out;
+    }
+    // integer mode
+    const lo = Math.ceil(min), hi = Math.floor(max);
+    if (hi < lo) return [];
+    const allowDup = els.dup.checked || count === 1;
+    const rangeSize = hi - lo + 1;
+    if (!allowDup && count > rangeSize) {
+      toast(`Cannot pick ${count} unique values from ${rangeSize} candidates`);
+      return [];
+    }
+    const used = new Set();
+    const out = [];
+    let guard = 0;
+    while (out.length < count && guard < 200000) {
+      guard++;
+      const v = eng.int(lo, hi);
+      if (!allowDup && used.has(v)) continue;
+      if (!passesFilters(v)) continue;
+      if (!allowDup) used.add(v);
+      out.push(v);
+    }
+    if (out.length < count) toast('Filter too strict — fewer results returned');
+    return out;
+  }
+
+  function genDice(eng) {
+    const m = els.dice.value.trim().match(/^(\d*)\s*d\s*(\d+)\s*([+-]\s*\d+)?$/i);
+    if (!m) { toast('Dice format: NdS±M, e.g. 2d6+1'); return []; }
+    const n = Math.min(parseInt(m[1] || '1', 10), 100);
+    const sides = parseInt(m[2], 10);
+    const mod = m[3] ? parseInt(m[3].replace(/\s+/g, ''), 10) : 0;
+    if (sides < 2) { toast('Dice must have at least 2 sides'); return []; }
+    const rolls = [];
+    for (let i = 0; i < n; i++) rolls.push(eng.int(1, sides));
+    const total = rolls.reduce((a, b) => a + b, 0) + mod;
+    return [{ rolls, mod, total }];
+  }
+
+  function genLottery(eng) {
+    const pick = Math.max(1, parseInt(els.lottoPick.value, 10) || 6);
+    const poolMax = Math.max(pick, parseInt(els.lottoMax.value, 10) || 49);
+    const pool = [];
+    for (let i = 1; i <= poolMax; i++) pool.push(i);
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = eng.int(0, i);
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    return [{ numbers: pool.slice(0, pick).sort((a, b) => a - b), poolMax }];
+  }
+
+  /* ---------- Rendering ---------- */
+  function fmtNum(n) {
+    return typeof n === 'number' ? n.toLocaleString(undefined, { maximumFractionDigits: 10 }) : String(n);
+  }
+  function render(nums, extra) {
+    lastNumbers = nums;
+    if (!nums || nums.length === 0) return;
+    let text;
+    if (mode === 'dice' && nums.length === 1 && nums[0] && nums[0].total !== undefined) {
+      const d = nums[0];
+      text = fmtNum(d.total);
+      els.meta.textContent = `🎲 ${d.rolls.join(' + ')}${d.mod ? (d.mod > 0 ? ' + ' + d.mod : ' − ' + Math.abs(d.mod)) : ''}`;
+    } else if (mode === 'lottery' && nums.length === 1 && nums[0] && nums[0].numbers) {
+      const l = nums[0];
+      text = l.numbers.join(' · ');
+      els.meta.textContent = `🎰 ${l.numbers.length} unique picks from 1–${l.poolMax}`;
+    } else {
+      text = nums.map(fmtNum).join(', ');
+      const metaParts = [`${nums.length} number${nums.length > 1 ? 's' : ''}`];
+      if (els.seed.checked) metaParts.push(`seed ${seedState}`);
+      metaParts.push(els.engineChip.textContent);
+      if (extra) metaParts.push(extra);
+      els.meta.textContent = metaParts.join(' • ');
+    }
+    els.result.textContent = text;
+    els.result.classList.remove('pop');
+    void els.result.offsetWidth;
+    els.result.classList.add('pop');
+
+    const flat = nums.filter(n => typeof n === 'number');
+    if (flat.length > 1) {
+      els.stats.style.display = 'grid';
+      els.stMin.textContent = fmtNum(Math.min(...flat));
+      els.stMax.textContent = fmtNum(Math.max(...flat));
+      els.stSum.textContent = fmtNum(flat.reduce((a, b) => a + b, 0));
+      const avg = flat.reduce((a, b) => a + b, 0) / flat.length;
+      els.stAvg.textContent = fmtNum(+avg.toFixed(2));
+    } else {
+      els.stats.style.display = 'none';
+    }
+  }
+
+  function toast(msg) {
+    els.toast.textContent = msg;
+    els.toast.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => els.toast.classList.remove('show'), 2400);
+  }
+
+  /* ---------- History ---------- */
+  function addHistory(text, meta) {
+    history.unshift({ text, meta, at: new Date().toISOString() });
+    if (history.length > 100) history.pop();
+    renderHistory();
+    saveHistory();
+  }
+  function renderHistory() {
+    els.histCount.textContent = history.length;
+    els.histEmpty.style.display = history.length ? 'none' : 'block';
+    els.history.innerHTML = '';
+    for (const h of history) {
+      const li = document.createElement('li');
+      const nums = document.createElement('span');
+      nums.className = 'h-nums';
+      nums.textContent = h.text;
+      const time = document.createElement('span');
+      time.className = 'h-time';
+      time.textContent = new Date(h.at).toLocaleTimeString();
+      const btn = document.createElement('button');
+      btn.textContent = 'Copy';
+      btn.addEventListener('click', () => copyText(h.text));
+      li.append(nums, time, btn);
+      els.history.appendChild(li);
+    }
+  }
+  function saveHistory() {
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 100))); }
+    catch (e) { /* storage unavailable */ }
+  }
+  function loadHistory() {
+    try {
+      const raw = localStorage.getItem(HISTORY_KEY);
+      if (raw) history = JSON.parse(raw) || [];
+    } catch (e) { history = []; }
+    renderHistory();
+  }
+
+  function copyText(text) {
+    const done = () => toast('📋 Copied: ' + (text.length > 40 ? text.slice(0, 40) + '…' : text));
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+    } else fallbackCopy(text, done);
+  }
+  function fallbackCopy(text, done) {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); done(); } catch (e) { toast('Copy failed'); }
+    document.body.removeChild(ta);
+  }
+
+  /* ---------- Persistence ---------- */
+  const watched = ['inMin','inMax','inCount','inDecimals','inDice','inLottoPick','inLottoMax',
+    'inDup','inSort','inExclude','inSeed','inSeedVal','inDigitLo','inDigitHi','inBlacklist','inFontSize'];
+  function saveSettings() {
+    const s = { mode, parity: currentParity(), fontSize: $('inFontSize').value };
+    for (const id of watched) { const el = $(id); s[id] = el.type === 'checkbox' ? el.checked : el.value; }
+    s.theme = document.documentElement.dataset.theme || 'dark';
+    s.accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch (e) { /* noop */ }
+  }
+  function loadSettings() {
+    let s;
+    try { s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null'); } catch (e) { s = null; }
+    if (!s) return;
+    mode = s.mode || 'int';
+    for (const id of watched) {
+      const el = $(id);
+      if (!(id in s)) continue;
+      if (el.type === 'checkbox') el.checked = s[id]; else el.value = s[id];
+    }
+    if (s.theme === 'light') setTheme('light');
+    if (s.accent) setAccent(s.accent);
+    setParity(s.parity || 'any');
+    $('inFontSize').dispatchEvent(new Event('input'));
+    updateModeUI();
+    syncLabels();
+  }
+  function setParity(v) {
+    els.parity.querySelectorAll('button').forEach(b =>
+      b.classList.toggle('active', b.dataset.v === v));
+  }
+
+  /* ---------- Mode UI ---------- */
+  function updateModeUI() {
+    els.decimalsField.style.display = mode === 'float' ? 'block' : 'none';
+    els.diceField.style.display = mode === 'dice' ? 'block' : 'none';
+    els.lotteryField.style.display = mode === 'lottery' ? 'block' : 'none';
+    document.querySelectorAll('#segMode button').forEach(b =>
+      b.classList.toggle('active', b.dataset.v === mode));
+  }
+  function syncLabels() {
+    els.countVal.textContent = els.count.value;
+    els.decVal.textContent = els.decimals.value;
+    $('fsVal').textContent = $('inFontSize').value + '%';
+  }
+
+  /* ---------- Generate ---------- */
+  function generate(silent) {
+    const nums = genNumbers();
+    if (!nums.length) return;
+    if (mode === 'int' && !modeIsSpecial() && els.sort.checked) {
+      nums.sort((a, b) => a - b);
+    }
+    render(nums);
+    let label = typeof nums[0] === 'object' && nums[0] !== null
+      ? (nums[0].total !== undefined ? String(nums[0].total) : nums[0].numbers.join(', '))
+      : nums.join(', ');
+    addHistory(label, mode);
+  }
+  function modeIsSpecial() { return mode === 'dice' || mode === 'lottery'; }
+
+  /* ---------- Auto-roll ---------- */
+  function toggleAuto() {
+    const btn = $('btnRoll');
+    if (autoTimer) {
+      clearInterval(autoTimer); autoTimer = null;
+      btn.textContent = '▶ Auto';
+      return;
+    }
+    autoTimer = setInterval(generate, 1000);
+    btn.textContent = '⏸ Stop';
+    generate();
+  }
+
+  /* ---------- Export ---------- */
+  function exportCSV() {
+    if (!history.length) { toast('Nothing to export'); return; }
+    const rows = ['time,values'];
+    for (const h of [...history].reverse()) {
+      rows.push(`"${new Date(h.at).toLocaleString()}","${h.text.replace(/"/g, '""')}"`);
+    }
+    const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'rng-history.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  /* ---------- Appearance ---------- */
+  function setTheme(t) {
+    if (t === 'light') document.documentElement.dataset.theme = 'light';
+    else delete document.documentElement.dataset.theme;
+    $('btnTheme').textContent = t === 'light' ? '☀️' : '🌙';
+  }
+  function setAccent(hex) {
+    const root = document.documentElement;
+    root.style.setProperty('--accent', hex);
+    root.style.setProperty('--accent-2', shiftHue(hex, 40));
+  }
+  function shiftHue(hex, deg) {
+    const n = hex.replace('#', '');
+    const r = parseInt(n.slice(0,2),16)/255, g = parseInt(n.slice(2,4),16)/255, b = parseInt(n.slice(4,6),16)/255;
+    const max = Math.max(r,g,b), min = Math.min(r,g,b);
+    let h = 0;
+    if (max !== min) {
+      const d = max - min;
+      if (max === r) h = ((g-b)/d + (g < b ? 6 : 0));
+      else if (max === g) h = (b-r)/d + 2;
+      else h = (r-g)/d + 4;
+      h *= 60;
+    }
+    h = (h + deg) % 360;
+    const s = max === 0 ? 0 : (max - min) / (1 - Math.abs(2 * (max-min)/1 - 1)) || 0;
+    const l = (max + min) / 2;
+    const c = (1 - Math.abs(2*l - 1)) * (max === min ? 0 : 1);
+    const hp = h / 60;
+    const x = c * (1 - Math.abs(hp % 2 - 1));
+    let r1=0,g1=0,b1=0;
+    if (hp<1){r1=c;g1=x;} else if(hp<2){r1=x;g1=c;} else if(hp<3){g1=c;b1=x;}
+    else if(hp<4){g1=x;b1=c;} else if(hp<5){r1=x;b1=c;} else {r1=c;b1=x;}
+    const m = l - c/2;
+    const to = v => Math.round((v+m)*255).toString(16).padStart(2,'0');
+    return '#' + to(r1)+to(g1)+to(b1);
+  }
+
+  /* ---------- Presets ---------- */
+  const PRESETS = {
+    coin:  { mode:'int', min:0, max:1, count:1, meta:'Heads = 1, Tails = 0' },
+    d20:   { mode:'dice', dice:'1d20', meta:'Roll a 20-sided die' },
+    lotto: { mode:'lottery', pick:6, poolMax:49, meta:'6 from 49' },
+    percent: { mode:'float', min:0, max:100, decimals:1, count:1, meta:'0–100%' },
+    pin:   { mode:'int', min:0, max:9999, count:1, sort:false, meta:'4-digit PIN — disable sorting' },
+    neg:   { mode:'int', min:-50, max:50, count:1, meta:'−50 to 50' }
+  };
+  function applyPreset(name) {
+    const p = PRESETS[name];
+    if (!p) return;
+    mode = p.mode;
+    if (p.min !== undefined) els.min.value = p.min;
+    if (p.max !== undefined) els.max.value = p.max;
+    if (p.count !== undefined) els.count.value = p.count;
+    if (p.dice) els.dice.value = p.dice;
+    if (p.decimals) els.decimals.value = p.decimals;
+    if (p.pick) els.lottoPick.value = p.pick;
+    if (p.poolMax) els.lottoMax.value = p.poolMax;
+    if (p.sort !== undefined) els.sort.checked = p.sort;
+    updateModeUI(); syncLabels(); saveSettings(); generate();
+    if (p.meta) toast(p.meta);
+  }
+
+  /* ---------- Wire-up ---------- */
+  $('btnGenerate').addEventListener('click', generate);
+  $('btnCopy').addEventListener('click', () => {
+    if (lastNumbers.length) copyText(els.result.textContent);
+    else toast('Nothing to copy');
+  });
+  $('btnRoll').addEventListener('click', toggleAuto);
+  $('btnExport').addEventListener('click', exportCSV);
+  $('btnClearHist').addEventListener('click', () => {
+    history = []; renderHistory(); saveHistory(); toast('History cleared');
+  });
+  $('btnTheme').addEventListener('click', () => {
+    const t = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+    setTheme(t); saveSettings();
+  });
+  $('btnReset').addEventListener('click', () => {
+    localStorage.removeItem(SETTINGS_KEY);
+    location.reload();
+  });
+
+  document.querySelectorAll('#segMode button').forEach(b =>
+    b.addEventListener('click', () => {
+      mode = b.dataset.v; updateModeUI(); saveSettings();
+    }));
+  els.parity.querySelectorAll('button').forEach(b =>
+    b.addEventListener('click', () => { setParity(b.dataset.v); saveSettings(); }));
+
+  for (const id of watched) {
+    $(id).addEventListener('input', () => { syncLabels(); saveSettings(); });
+    $(id).addEventListener('change', () => saveSettings());
+    $(id).addEventListener('change', () => { if (id === 'inSeed') els.engineChip.textContent = els.seed.checked ? 'seed' : 'crypto'; });
+  }
+  els.seed.addEventListener('change', () => {
+    els.seedField.style.display = els.seed.checked ? 'block' : 'none';
+    els.engineChip.textContent = els.seed.checked ? 'seed' : 'crypto';
+  });
+  document.querySelectorAll('#presets button').forEach(b =>
+    b.addEventListener('click', () => applyPreset(b.dataset.p)));
+  document.querySelectorAll('#swatches .swatch').forEach(s =>
+    s.addEventListener('click', () => {
+      document.querySelectorAll('#swatches .swatch').forEach(x => x.classList.remove('active'));
+      s.classList.add('active');
+      setAccent(s.dataset.c); saveSettings();
+    }));
+
+  document.addEventListener('keydown', e => {
+    if (e.target.matches('input, select, textarea')) return;
+    if (e.code === 'Space') { e.preventDefault(); generate(); }
+    else if (e.key === 'c' || e.key === 'C') { if (lastNumbers.length) copyText(els.result.textContent); }
+    else if (e.key === 'a' || e.key === 'A') toggleAuto();
+  });
+
+  /* ---------- Init ---------- */
+  loadSettings();
+  loadHistory();
+  syncLabels();
+  updateModeUI();
+  els.seedField.style.display = els.seed.checked ? 'block' : 'none';
+  els.engineChip.textContent = els.seed.checked ? 'seed' : 'crypto';
+  els.min.addEventListener('focus', e => e.target.select());
+  els.max.addEventListener('focus', e => e.target.select());
+})();
+</script>
+</body>
+</html>
